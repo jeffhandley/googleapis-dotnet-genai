@@ -28,7 +28,7 @@
 
   <ItemGroup>
     <PackageReference Include="Google.Apis.Auth" />
-    <PackageReference Include="Microsoft.Extensions.AI.Abstractions" />
+    <ProjectReference Include="..\..\tarekgh-extensions\src\Libraries\Microsoft.Extensions.AI.Abstractions\Microsoft.Extensions.AI.Abstractions.csproj" />
     <PackageReference Include="MimeTypes" />
     <InternalsVisibleTo Include="Google.GenAI.Tests" />
     <InternalsVisibleTo Include="Google.GenAI.Netstandard2_0.Tests" />
