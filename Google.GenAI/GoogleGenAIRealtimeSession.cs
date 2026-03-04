@@ -45,6 +45,9 @@ public sealed class GoogleGenAIRealtimeSession : IRealtimeSession
   // Track whether a response is in progress to emit ResponseCreated only once per response
   private bool _responseInProgress;
 
+  // Track whether audio was sent via SendRealtimeInputAsync to avoid mixing with SendClientContentAsync
+  private bool _lastInputWasRealtime;
+
   /// <inheritdoc />
   public RealtimeSessionOptions? Options { get; private set; }
 
@@ -99,11 +102,16 @@ public sealed class GoogleGenAIRealtimeSession : IRealtimeSession
           break;
 
         case RealtimeClientResponseCreateMessage:
-          // Google's Live API generates responses automatically after TurnComplete=true
-          // or via VAD. Sending a TurnComplete signal if there's buffered content.
-          await _asyncSession.SendClientContentAsync(
-            new LiveSendClientContentParameters { TurnComplete = true },
-            cancellationToken).ConfigureAwait(false);
+          // Google's Live API generates responses automatically after ActivityEnd
+          // when using SendRealtimeInputAsync. Only send TurnComplete via
+          // SendClientContentAsync when text content was sent (non-realtime path).
+          // Mixing the two APIs causes unexpected behavior per Google's docs.
+          if (!_lastInputWasRealtime)
+          {
+            await _asyncSession.SendClientContentAsync(
+              new LiveSendClientContentParameters { TurnComplete = true },
+              cancellationToken).ConfigureAwait(false);
+          }
           break;
 
         default:
@@ -201,6 +209,7 @@ public sealed class GoogleGenAIRealtimeSession : IRealtimeSession
     byte[] audioBytes = ExtractAudioBytes(audioAppend.Content);
 
     // Send audio directly as realtime input (Google uses VAD)
+    _lastInputWasRealtime = true;
     return _asyncSession.SendRealtimeInputAsync(
       new LiveSendRealtimeInputParameters
       {
@@ -295,6 +304,7 @@ public sealed class GoogleGenAIRealtimeSession : IRealtimeSession
       _ => "user",
     };
 
+    _lastInputWasRealtime = false;
     await _asyncSession.SendClientContentAsync(
       new LiveSendClientContentParameters
       {
