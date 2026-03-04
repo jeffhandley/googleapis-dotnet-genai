@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Net.WebSockets;
 using System.Runtime.CompilerServices;
@@ -38,14 +37,22 @@ public sealed class GoogleGenAIRealtimeSession : IRealtimeSession
   private readonly ChatClientMetadata _metadata;
   private int _disposed;
 
-  // Buffer for audio chunks between Append and Commit
+  // Buffer for audio chunks between Append and Commit.
+  // Protected by _audioBufferLock. Capped at MaxAudioBufferBytes to prevent unbounded growth.
   private readonly List<byte[]> _audioBuffer = new();
   private readonly object _audioBufferLock = new();
+  private int _audioBufferSize;
 
-  // Track whether a response is in progress to emit ResponseCreated only once per response
+  /// <summary>Maximum buffered audio size (10 MB). Exceeding this throws <see cref="InvalidOperationException"/>.</summary>
+  private const int MaxAudioBufferBytes = 10 * 1024 * 1024;
+
+  // Track whether a response is in progress to emit ResponseCreated only once per response.
+  // Accessed only from GetStreamingResponseAsync's single enumeration; callers must not
+  // enumerate concurrently.
   private bool _responseInProgress;
 
-  // Track whether audio was sent via SendRealtimeInputAsync to avoid mixing with SendClientContentAsync
+  // Track whether audio was sent via SendRealtimeInputAsync to avoid mixing with SendClientContentAsync.
+  // Accessed only from SendClientMessageAsync; callers must serialize sends.
   private bool _lastInputWasRealtime;
 
   /// <inheritdoc />
@@ -206,7 +213,15 @@ public sealed class GoogleGenAIRealtimeSession : IRealtimeSession
     // Buffer audio data; it will be sent on commit with proper activity framing.
     lock (_audioBufferLock)
     {
+      if (_audioBufferSize + audioBytes.Length > MaxAudioBufferBytes)
+      {
+        throw new InvalidOperationException(
+          $"Audio buffer would exceed {MaxAudioBufferBytes} bytes. " +
+          "Call AudioBufferCommit before appending more audio.");
+      }
+
       _audioBuffer.Add(audioBytes);
+      _audioBufferSize += audioBytes.Length;
     }
 
     return Task.CompletedTask;
@@ -232,6 +247,7 @@ public sealed class GoogleGenAIRealtimeSession : IRealtimeSession
         offset += chunk.Length;
       }
       _audioBuffer.Clear();
+      _audioBufferSize = 0;
     }
 
     _lastInputWasRealtime = true;
