@@ -61,9 +61,6 @@ public sealed class GoogleGenAIRealtimeClient : IRealtimeClient
       return null;
     }
 
-    // Wait for SetupComplete from the server
-    var setupMessage = await asyncSession.ReceiveAsync(cancellationToken).ConfigureAwait(false);
-
     return new GoogleGenAIRealtimeSession(asyncSession, _client, model, options);
   }
 

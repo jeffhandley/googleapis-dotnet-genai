@@ -316,6 +316,12 @@ public sealed class GoogleGenAIRealtimeSession : IRealtimeSession
 
   private IEnumerable<RealtimeServerMessage> MapServerMessage(LiveServerMessage serverMessage)
   {
+    // SetupComplete — skip (internal protocol message, not relevant to MEAI consumers)
+    if (serverMessage.SetupComplete is not null)
+    {
+      yield break;
+    }
+
     // Server content (model responses — audio, text, transcription)
     if (serverMessage.ServerContent is { } serverContent)
     {
@@ -432,8 +438,8 @@ public sealed class GoogleGenAIRealtimeSession : IRealtimeSession
       };
     }
 
-    // Turn complete
-    if (serverContent.TurnComplete == true)
+    // Turn complete or generation complete
+    if (serverContent.TurnComplete == true || serverContent.GenerationComplete == true)
     {
       yield return new RealtimeServerResponseCreatedMessage(RealtimeServerMessageType.ResponseDone)
       {
