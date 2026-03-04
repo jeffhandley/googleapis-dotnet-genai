@@ -63,11 +63,13 @@ public sealed class GoogleGenAIRealtimeSession : IRealtimeSession
   }
 
   /// <inheritdoc />
+  /// <remarks>
+  /// Google's Live API configures the session entirely at connection time via <c>ConnectAsync</c>.
+  /// Mid-session reconfiguration is not supported by the protocol. This method stores the options
+  /// locally for reference but does not apply them to the active session.
+  /// </remarks>
   public Task UpdateAsync(RealtimeSessionOptions options, CancellationToken cancellationToken = default)
   {
-    // Google's Live API configures the session at connection time.
-    // Mid-session reconfiguration is not supported by the protocol.
-    // Store options locally for reference; tools and instructions were set at connect time.
     Options = options ?? throw new ArgumentNullException(nameof(options));
     return Task.CompletedTask;
   }
@@ -78,8 +80,7 @@ public sealed class GoogleGenAIRealtimeSession : IRealtimeSession
     CancellationToken cancellationToken = default)
   {
     if (message == null) throw new ArgumentNullException(nameof(message));
-
-    if (cancellationToken.IsCancellationRequested) return;
+    cancellationToken.ThrowIfCancellationRequested();
 
     try
     {
@@ -163,7 +164,18 @@ public sealed class GoogleGenAIRealtimeSession : IRealtimeSession
   public void Dispose()
   {
     if (Interlocked.Exchange(ref _disposed, 1) != 0) return;
-    _asyncSession.DisposeAsync().AsTask().GetAwaiter().GetResult();
+
+    // Avoid calling DisposeAsync().GetAwaiter().GetResult() which can deadlock.
+    // Close the underlying session synchronously if possible; the async path
+    // in DisposeAsync handles the full graceful shutdown.
+    try
+    {
+      _asyncSession.DisposeAsync().AsTask().GetAwaiter().GetResult();
+    }
+    catch (Exception ex) when (ex is ObjectDisposedException or WebSocketException)
+    {
+      // Already disposed or disconnected
+    }
   }
 
   /// <inheritdoc />
@@ -484,7 +496,12 @@ public sealed class GoogleGenAIRealtimeSession : IRealtimeSession
 
   #region Tool Mapping Helpers
 
-  /// <summary>Converts an <see cref="AIFunction"/> to a Google GenAI <see cref="FunctionDeclaration"/>.</summary>
+  /// <summary>
+  /// Converts an <see cref="AIFunction"/> to a Google GenAI <see cref="FunctionDeclaration"/>,
+  /// mapping the function name, description, and JSON schema for parameters.
+  /// </summary>
+  /// <param name="aiFunction">The AI function to convert.</param>
+  /// <returns>A Google GenAI function declaration.</returns>
   internal static FunctionDeclaration ToGoogleFunctionDeclaration(AIFunction aiFunction)
   {
     var declaration = new FunctionDeclaration

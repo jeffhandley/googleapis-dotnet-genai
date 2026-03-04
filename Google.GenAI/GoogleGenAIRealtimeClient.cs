@@ -34,6 +34,7 @@ public sealed class GoogleGenAIRealtimeClient : IRealtimeClient
   /// <summary>Initializes a new instance wrapping an existing <see cref="Client"/>.</summary>
   /// <param name="client">The Google GenAI client.</param>
   /// <param name="defaultModelId">The default model to use for realtime sessions (e.g. "gemini-2.5-flash-native-audio-preview-12-2025").</param>
+  /// <exception cref="ArgumentNullException"><paramref name="client"/> is <see langword="null"/>.</exception>
   public GoogleGenAIRealtimeClient(Client client, string? defaultModelId = null)
   {
     _client = client ?? throw new ArgumentNullException(nameof(client));
