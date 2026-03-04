@@ -15,6 +15,7 @@
  */
 
 using System.Diagnostics.CodeAnalysis;
+using System.Linq;
 using System.Net.WebSockets;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
@@ -338,7 +339,7 @@ public sealed class GoogleGenAIRealtimeSession : IRealtimeSession
       {
         var contents = new List<AIContent>
         {
-          new FunctionCallContent(fc.Id ?? string.Empty, fc.Name ?? string.Empty, fc.Args)
+          new FunctionCallContent(fc.Id ?? string.Empty, fc.Name ?? string.Empty, fc.Args?.ToDictionary(kvp => kvp.Key, kvp => (object?)kvp.Value))
         };
 
         var item = new RealtimeContentItem(contents, id: fc.Id, role: ChatRole.Assistant);
