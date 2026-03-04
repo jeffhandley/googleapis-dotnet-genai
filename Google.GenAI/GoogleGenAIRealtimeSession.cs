@@ -224,7 +224,7 @@ public sealed class GoogleGenAIRealtimeSession : IRealtimeSession
 
   private async Task HandleAudioCommitAsync(CancellationToken cancellationToken)
   {
-    byte[] audioBytes;
+    List<byte[]> bufferedChunks;
     lock (_audioBufferLock)
     {
       if (_audioBuffer.Count == 0)
@@ -232,15 +232,9 @@ public sealed class GoogleGenAIRealtimeSession : IRealtimeSession
         return;
       }
 
-      int totalLen = 0;
-      foreach (var chunk in _audioBuffer) totalLen += chunk.Length;
-      audioBytes = new byte[totalLen];
-      int offset = 0;
-      foreach (var chunk in _audioBuffer)
-      {
-        System.Buffer.BlockCopy(chunk, 0, audioBytes, offset, chunk.Length);
-        offset += chunk.Length;
-      }
+      // Snapshot and clear the buffer. Avoids consolidating all chunks into a
+      // single array only to re-split — instead we send each buffered chunk directly.
+      bufferedChunks = new List<byte[]>(_audioBuffer);
       _audioBuffer.Clear();
       _audioBufferSize = 0;
     }
@@ -256,23 +250,26 @@ public sealed class GoogleGenAIRealtimeSession : IRealtimeSession
       },
       cancellationToken).ConfigureAwait(false);
 
-    const int chunkSize = 32000;
-    for (int i = 0; i < audioBytes.Length; i += chunkSize)
+    // Send buffered chunks directly, splitting only those that exceed the frame size limit.
+    const int maxFrameBytes = 32_000;
+    foreach (var buffered in bufferedChunks)
     {
-      int len = Math.Min(chunkSize, audioBytes.Length - i);
-      byte[] chunk = new byte[len];
-      System.Buffer.BlockCopy(audioBytes, i, chunk, 0, len);
-
-      await _asyncSession.SendRealtimeInputAsync(
-        new LiveSendRealtimeInputParameters
+      if (buffered.Length <= maxFrameBytes)
+      {
+        // Common case: chunk fits in a single frame — send without copying
+        await SendAudioFrameAsync(buffered, cancellationToken).ConfigureAwait(false);
+      }
+      else
+      {
+        // Large chunk: split into frames
+        for (int i = 0; i < buffered.Length; i += maxFrameBytes)
         {
-          Audio = new Blob
-          {
-            Data = chunk,
-            MimeType = "audio/pcm",
-          }
-        },
-        cancellationToken).ConfigureAwait(false);
+          int len = Math.Min(maxFrameBytes, buffered.Length - i);
+          byte[] frame = new byte[len];
+          System.Buffer.BlockCopy(buffered, i, frame, 0, len);
+          await SendAudioFrameAsync(frame, cancellationToken).ConfigureAwait(false);
+        }
+      }
     }
 
     // Signal end of user activity — this triggers the model to respond.
@@ -282,6 +279,20 @@ public sealed class GoogleGenAIRealtimeSession : IRealtimeSession
         ActivityEnd = new ActivityEnd()
       },
       cancellationToken).ConfigureAwait(false);
+  }
+
+  private Task SendAudioFrameAsync(byte[] data, CancellationToken cancellationToken)
+  {
+    return _asyncSession.SendRealtimeInputAsync(
+      new LiveSendRealtimeInputParameters
+      {
+        Audio = new Blob
+        {
+          Data = data,
+          MimeType = "audio/pcm",
+        }
+      },
+      cancellationToken);
   }
 
   private async Task HandleConversationItemCreateAsync(
