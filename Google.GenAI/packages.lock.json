@@ -13,6 +13,15 @@
           "System.Management": "7.0.2"
         }
       },
+      "Microsoft.Extensions.AI.Abstractions": {
+        "type": "Direct",
+        "requested": "[10.4.0-dev, )",
+        "resolved": "10.4.0-dev",
+        "contentHash": "N9M3as+1UoHVbQtI2LHdzM1Z9qhKPZtQxch8pj2A2oklyh4kpDbuSgh311VT+S5wQREVLeLlzpenGzSRflH6gw==",
+        "dependencies": {
+          "System.Text.Json": "10.0.2"
+        }
+      },
       "MimeTypes": {
         "type": "Direct",
         "requested": "[2.5.2, )",
@@ -120,12 +129,6 @@
           "System.Runtime.CompilerServices.Unsafe": "6.1.2"
         }
       },
-      "microsoft.extensions.ai.abstractions": {
-        "type": "Project",
-        "dependencies": {
-          "System.Text.Json": "[10.0.2, )"
-        }
-      },
       "Microsoft.Bcl.AsyncInterfaces": {
         "type": "CentralTransitive",
         "requested": "[10.0.3, )",
@@ -161,6 +164,15 @@
           "Google.Apis": "1.69.0",
           "Google.Apis.Core": "1.69.0",
           "System.Management": "7.0.2"
+        }
+      },
+      "Microsoft.Extensions.AI.Abstractions": {
+        "type": "Direct",
+        "requested": "[10.4.0-dev, )",
+        "resolved": "10.4.0-dev",
+        "contentHash": "N9M3as+1UoHVbQtI2LHdzM1Z9qhKPZtQxch8pj2A2oklyh4kpDbuSgh311VT+S5wQREVLeLlzpenGzSRflH6gw==",
+        "dependencies": {
+          "System.Text.Json": "10.0.2"
         }
       },
       "MimeTypes": {
@@ -212,12 +224,6 @@
         "type": "Transitive",
         "resolved": "10.0.2",
         "contentHash": "Ro4cLT4qpRy64crfLAy3ekihtXckeXrD5eI6qb6NDSEVyHcHsmH7KgN4dbnIuiBmXIoaCslx4SynLYxag1SLSQ=="
-      },
-      "microsoft.extensions.ai.abstractions": {
-        "type": "Project",
-        "dependencies": {
-          "System.Text.Json": "[10.0.2, )"
-        }
       },
       "System.Text.Json": {
         "type": "CentralTransitive",

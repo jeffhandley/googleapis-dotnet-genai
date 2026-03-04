@@ -18,6 +18,7 @@
     <PackageVersion Include="Google.Apis.Auth" Version="1.69.0" />
     <PackageVersion Include="NAudio" Version="2.2.1" />
     <PackageVersion Include="TestServerSdk" Version="0.1.5" />
+    <PackageVersion Include="Microsoft.Extensions.AI.Abstractions" Version="10.4.0-dev" />
     <PackageVersion Include="Microsoft.Bcl.AsyncInterfaces" Version="10.0.3" />
     <!-- Stress test dependencies -->
     <PackageVersion Include="NBomber" Version="6.0.0" />
