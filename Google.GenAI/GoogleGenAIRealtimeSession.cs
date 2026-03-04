@@ -165,17 +165,19 @@ public sealed class GoogleGenAIRealtimeSession : IRealtimeSession
   {
     if (Interlocked.Exchange(ref _disposed, 1) != 0) return;
 
-    // Avoid calling DisposeAsync().GetAwaiter().GetResult() which can deadlock.
-    // Close the underlying session synchronously if possible; the async path
-    // in DisposeAsync handles the full graceful shutdown.
-    try
+    // Fire-and-forget async disposal on a thread pool thread to avoid
+    // deadlocking when called from a UI thread with a SynchronizationContext.
+    _ = Task.Run(async () =>
     {
-      _asyncSession.DisposeAsync().AsTask().GetAwaiter().GetResult();
-    }
-    catch (Exception ex) when (ex is ObjectDisposedException or WebSocketException)
-    {
-      // Already disposed or disconnected
-    }
+      try
+      {
+        await _asyncSession.DisposeAsync().ConfigureAwait(false);
+      }
+      catch (Exception ex) when (ex is ObjectDisposedException or WebSocketException)
+      {
+        // Already disposed or disconnected
+      }
+    });
   }
 
   /// <inheritdoc />
