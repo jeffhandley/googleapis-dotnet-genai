@@ -32,8 +32,6 @@ namespace Microsoft.Extensions.AI;
 public sealed class GoogleGenAIRealtimeSession : IRealtimeSession
 {
   private readonly AsyncSession _asyncSession;
-  private readonly Client _client;
-  private readonly string _model;
   private readonly ChatClientMetadata _metadata;
   private int _disposed;
 
@@ -61,13 +59,10 @@ public sealed class GoogleGenAIRealtimeSession : IRealtimeSession
   /// <summary>Initializes a new instance wrapping a connected <see cref="AsyncSession"/>.</summary>
   internal GoogleGenAIRealtimeSession(
     AsyncSession asyncSession,
-    Client client,
     string model,
     RealtimeSessionOptions? initialOptions)
   {
     _asyncSession = asyncSession ?? throw new ArgumentNullException(nameof(asyncSession));
-    _client = client ?? throw new ArgumentNullException(nameof(client));
-    _model = model;
     _metadata = new ChatClientMetadata("google-genai", defaultModelId: model);
     Options = initialOptions;
   }

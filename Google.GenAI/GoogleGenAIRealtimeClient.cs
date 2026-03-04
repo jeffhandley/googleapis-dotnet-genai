@@ -14,8 +14,6 @@
  * limitations under the License.
  */
 
-using System.Diagnostics.CodeAnalysis;
-
 using Google.GenAI;
 using Google.GenAI.Types;
 
@@ -53,7 +51,7 @@ public sealed class GoogleGenAIRealtimeClient : IRealtimeClient
 
     var asyncSession = await _client.Live.ConnectAsync(model, config, cancellationToken).ConfigureAwait(false);
 
-    return new GoogleGenAIRealtimeSession(asyncSession, _client, model, options);
+    return new GoogleGenAIRealtimeSession(asyncSession, model, options);
   }
 
   /// <inheritdoc />
