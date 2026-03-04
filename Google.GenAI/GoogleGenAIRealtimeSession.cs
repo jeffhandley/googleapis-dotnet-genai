@@ -511,7 +511,8 @@ public sealed class GoogleGenAIRealtimeSession : IRealtimeSession
     };
 
     // Map the JSON schema for parameters
-    if (aiFunction.JsonSchema is JsonElement schemaElement)
+    if (aiFunction.JsonSchema is JsonElement schemaElement &&
+        schemaElement.ValueKind != JsonValueKind.Undefined)
     {
       declaration.ParametersJsonSchema = schemaElement;
     }
