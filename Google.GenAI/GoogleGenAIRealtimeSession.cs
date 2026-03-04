@@ -102,10 +102,6 @@ public sealed class GoogleGenAIRealtimeSession : IRealtimeSession
           break;
 
         case RealtimeClientResponseCreateMessage:
-          // Google's Live API generates responses automatically after ActivityEnd
-          // when using SendRealtimeInputAsync. Only send TurnComplete via
-          // SendClientContentAsync when text content was sent (non-realtime path).
-          // Mixing the two APIs causes unexpected behavior per Google's docs.
           if (!_lastInputWasRealtime)
           {
             await _asyncSession.SendClientContentAsync(
@@ -115,7 +111,6 @@ public sealed class GoogleGenAIRealtimeSession : IRealtimeSession
           break;
 
         default:
-          // Attempt raw passthrough for unknown message types
           break;
       }
     }
@@ -208,23 +203,68 @@ public sealed class GoogleGenAIRealtimeSession : IRealtimeSession
 
     byte[] audioBytes = ExtractAudioBytes(audioAppend.Content);
 
-    // Send audio directly as realtime input (Google uses VAD)
-    _lastInputWasRealtime = true;
-    return _asyncSession.SendRealtimeInputAsync(
-      new LiveSendRealtimeInputParameters
-      {
-        Audio = new Blob
-        {
-          Data = audioBytes,
-          MimeType = "audio/pcm",
-        }
-      },
-      cancellationToken);
+    // Buffer audio data; it will be sent on commit with proper activity framing.
+    lock (_audioBufferLock)
+    {
+      _audioBuffer.Add(audioBytes);
+    }
+
+    return Task.CompletedTask;
   }
 
   private async Task HandleAudioCommitAsync(CancellationToken cancellationToken)
   {
-    // Signal end of audio activity to trigger response generation
+    byte[] audioBytes;
+    lock (_audioBufferLock)
+    {
+      if (_audioBuffer.Count == 0)
+      {
+        return;
+      }
+
+      int totalLen = 0;
+      foreach (var chunk in _audioBuffer) totalLen += chunk.Length;
+      audioBytes = new byte[totalLen];
+      int offset = 0;
+      foreach (var chunk in _audioBuffer)
+      {
+        System.Buffer.BlockCopy(chunk, 0, audioBytes, offset, chunk.Length);
+        offset += chunk.Length;
+      }
+      _audioBuffer.Clear();
+    }
+
+    _lastInputWasRealtime = true;
+
+    // With automatic VAD disabled, explicit ActivityStart/ActivityEnd framing is required.
+    // ActivityStart marks the beginning of user speech; ActivityEnd triggers model response.
+    await _asyncSession.SendRealtimeInputAsync(
+      new LiveSendRealtimeInputParameters
+      {
+        ActivityStart = new ActivityStart()
+      },
+      cancellationToken).ConfigureAwait(false);
+
+    const int chunkSize = 32000;
+    for (int i = 0; i < audioBytes.Length; i += chunkSize)
+    {
+      int len = Math.Min(chunkSize, audioBytes.Length - i);
+      byte[] chunk = new byte[len];
+      System.Buffer.BlockCopy(audioBytes, i, chunk, 0, len);
+
+      await _asyncSession.SendRealtimeInputAsync(
+        new LiveSendRealtimeInputParameters
+        {
+          Audio = new Blob
+          {
+            Data = chunk,
+            MimeType = "audio/pcm",
+          }
+        },
+        cancellationToken).ConfigureAwait(false);
+    }
+
+    // Signal end of user activity — this triggers the model to respond.
     await _asyncSession.SendRealtimeInputAsync(
       new LiveSendRealtimeInputParameters
       {

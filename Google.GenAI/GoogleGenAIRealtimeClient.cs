@@ -170,6 +170,14 @@ public sealed class GoogleGenAIRealtimeClient : IRealtimeClient
       config.OutputAudioTranscription = new AudioTranscriptionConfig();
     }
 
+    // Disable automatic VAD when using the MEAI audio buffering pattern
+    // (AudioBufferAppend → AudioBufferCommit → ResponseCreate).
+    // The client controls activity boundaries via explicit ActivityEnd signals.
+    config.RealtimeInputConfig = new RealtimeInputConfig
+    {
+      AutomaticActivityDetection = new AutomaticActivityDetection { Disabled = true }
+    };
+
     return config;
   }
 }
