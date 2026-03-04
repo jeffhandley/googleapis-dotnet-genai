@@ -42,6 +42,9 @@ public sealed class GoogleGenAIRealtimeSession : IRealtimeSession
   private readonly List<byte[]> _audioBuffer = new();
   private readonly object _audioBufferLock = new();
 
+  // Track whether a response is in progress to emit ResponseCreated only once per response
+  private bool _responseInProgress;
+
   /// <inheritdoc />
   public RealtimeSessionOptions? Options { get; private set; }
 
@@ -332,9 +335,18 @@ public sealed class GoogleGenAIRealtimeSession : IRealtimeSession
       }
     }
 
-    // Tool calls
+    // Tool calls — emit ResponseCreated (if not already), then ResponseOutputItemAdded + ResponseOutputItemDone for each
     if (serverMessage.ToolCall is { FunctionCalls: { Count: > 0 } functionCalls })
     {
+      if (!_responseInProgress)
+      {
+        _responseInProgress = true;
+        yield return new RealtimeServerResponseCreatedMessage(RealtimeServerMessageType.ResponseCreated)
+        {
+          RawRepresentation = serverMessage,
+        };
+      }
+
       foreach (var fc in functionCalls)
       {
         var contents = new List<AIContent>
@@ -344,7 +356,15 @@ public sealed class GoogleGenAIRealtimeSession : IRealtimeSession
 
         var item = new RealtimeContentItem(contents, id: fc.Id, role: ChatRole.Assistant);
 
+        // Emit ResponseOutputItemAdded (signals start of output item)
         yield return new RealtimeServerResponseOutputItemMessage(RealtimeServerMessageType.ResponseOutputItemAdded)
+        {
+          Item = item,
+          RawRepresentation = serverMessage,
+        };
+
+        // Emit ResponseOutputItemDone (required by FunctionInvokingRealtimeSession middleware)
+        yield return new RealtimeServerResponseOutputItemMessage(RealtimeServerMessageType.ResponseOutputItemDone)
         {
           Item = item,
           RawRepresentation = serverMessage,
@@ -394,6 +414,16 @@ public sealed class GoogleGenAIRealtimeSession : IRealtimeSession
   {
     if (serverContent.ModelTurn?.Parts is { Count: > 0 } parts)
     {
+      // Emit ResponseCreated once when a new response cycle begins
+      if (!_responseInProgress)
+      {
+        _responseInProgress = true;
+        yield return new RealtimeServerResponseCreatedMessage(RealtimeServerMessageType.ResponseCreated)
+        {
+          RawRepresentation = rawMessage,
+        };
+      }
+
       foreach (var part in parts)
       {
         // Audio data
@@ -439,9 +469,10 @@ public sealed class GoogleGenAIRealtimeSession : IRealtimeSession
       };
     }
 
-    // Turn complete or generation complete
+    // Turn complete or generation complete — reset response tracking and emit ResponseDone
     if (serverContent.TurnComplete == true || serverContent.GenerationComplete == true)
     {
+      _responseInProgress = false;
       yield return new RealtimeServerResponseCreatedMessage(RealtimeServerMessageType.ResponseDone)
       {
         RawRepresentation = rawMessage,

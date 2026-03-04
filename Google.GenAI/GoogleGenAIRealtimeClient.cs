@@ -15,7 +15,6 @@
  */
 
 using System.Diagnostics.CodeAnalysis;
-using System.Net.WebSockets;
 
 using Google.GenAI;
 using Google.GenAI.Types;
@@ -42,7 +41,7 @@ public sealed class GoogleGenAIRealtimeClient : IRealtimeClient
   }
 
   /// <inheritdoc />
-  public async Task<IRealtimeSession?> CreateSessionAsync(
+  public async Task<IRealtimeSession> CreateSessionAsync(
     RealtimeSessionOptions? options = null,
     CancellationToken cancellationToken = default)
   {
@@ -51,15 +50,7 @@ public sealed class GoogleGenAIRealtimeClient : IRealtimeClient
 
     var config = BuildLiveConnectConfig(options);
 
-    AsyncSession asyncSession;
-    try
-    {
-      asyncSession = await _client.Live.ConnectAsync(model, config, cancellationToken).ConfigureAwait(false);
-    }
-    catch (Exception ex) when (ex is WebSocketException or OperationCanceledException or IOException)
-    {
-      return null;
-    }
+    var asyncSession = await _client.Live.ConnectAsync(model, config, cancellationToken).ConfigureAwait(false);
 
     return new GoogleGenAIRealtimeSession(asyncSession, _client, model, options);
   }

@@ -17,7 +17,7 @@
         "type": "Direct",
         "requested": "[10.4.0-dev, )",
         "resolved": "10.4.0-dev",
-        "contentHash": "N9M3as+1UoHVbQtI2LHdzM1Z9qhKPZtQxch8pj2A2oklyh4kpDbuSgh311VT+S5wQREVLeLlzpenGzSRflH6gw==",
+        "contentHash": "vJBnv3/1Jpbp2+Tflm/xhWfbdEQ0EZCpYqev1k+1Z1r0F4g/FKJY8CR1YO3Xd/b5q/PTCLfDterl+krJKhw+Lw==",
         "dependencies": {
           "System.Text.Json": "10.0.2"
         }
@@ -170,7 +170,7 @@
         "type": "Direct",
         "requested": "[10.4.0-dev, )",
         "resolved": "10.4.0-dev",
-        "contentHash": "N9M3as+1UoHVbQtI2LHdzM1Z9qhKPZtQxch8pj2A2oklyh4kpDbuSgh311VT+S5wQREVLeLlzpenGzSRflH6gw==",
+        "contentHash": "vJBnv3/1Jpbp2+Tflm/xhWfbdEQ0EZCpYqev1k+1Z1r0F4g/FKJY8CR1YO3Xd/b5q/PTCLfDterl+krJKhw+Lw==",
         "dependencies": {
           "System.Text.Json": "10.0.2"
         }
