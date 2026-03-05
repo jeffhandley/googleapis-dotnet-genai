@@ -203,7 +203,7 @@ public sealed class GoogleGenAIRealtimeSession : IRealtimeSession
       return Task.CompletedTask;
     }
 
-    byte[] audioBytes = ExtractAudioBytes(audioAppend.Content);
+    byte[] audioBytes = ExtractDataBytes(audioAppend.Content);
 
     // Buffer audio data; it will be sent on commit with proper activity framing.
     lock (_audioBufferLock)
@@ -343,16 +343,23 @@ public sealed class GoogleGenAIRealtimeSession : IRealtimeSession
           {
             InlineData = new Blob
             {
-              Data = ExtractAudioBytes(dataContent),
+              Data = ExtractDataBytes(dataContent),
               MimeType = dataContent.MediaType ?? "audio/pcm",
             }
           });
         }
-        else if (dataContent.HasTopLevelMediaType("image") && dataContent.Uri is not null)
+        else if (dataContent.HasTopLevelMediaType("image"))
         {
+          // For images, use InlineData with the raw bytes. The Google Live API
+          // requires InlineData for data: URIs; FileData only supports GCS/HTTP URIs.
+          byte[] imageBytes = ExtractDataBytes(dataContent);
           parts.Add(new Part
           {
-            FileData = new FileData { FileUri = dataContent.Uri }
+            InlineData = new Blob
+            {
+              Data = imageBytes,
+              MimeType = dataContent.MediaType ?? "image/png",
+            }
           });
         }
       }
@@ -378,12 +385,11 @@ public sealed class GoogleGenAIRealtimeSession : IRealtimeSession
             Role = role,
           }
         },
-        TurnComplete = true,
       },
       cancellationToken).ConfigureAwait(false);
   }
 
-  private static byte[] ExtractAudioBytes(DataContent content)
+  private static byte[] ExtractDataBytes(DataContent content)
   {
     string? dataUri = content.Uri?.ToString();
 
