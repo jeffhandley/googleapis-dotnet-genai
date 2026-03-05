@@ -40,7 +40,7 @@ public sealed class GoogleGenAIRealtimeClient : IRealtimeClient
   }
 
   /// <inheritdoc />
-  public async Task<IRealtimeSession> CreateSessionAsync(
+  public async Task<IRealtimeClientSession> CreateSessionAsync(
     RealtimeSessionOptions? options = null,
     CancellationToken cancellationToken = default)
   {

@@ -25,11 +25,11 @@ using Google.GenAI.Types;
 namespace Microsoft.Extensions.AI;
 
 /// <summary>
-/// Provides an <see cref="IRealtimeSession"/> implementation for Google GenAI's Live API,
+/// Provides an <see cref="IRealtimeClientSession"/> implementation for Google GenAI's Live API,
 /// wrapping an <see cref="AsyncSession"/> WebSocket connection.
 /// </summary>
 #pragma warning disable MEAI001 // Experimental AI API
-public sealed class GoogleGenAIRealtimeSession : IRealtimeSession
+public sealed class GoogleGenAIRealtimeSession : IRealtimeClientSession
 {
   private readonly AsyncSession _asyncSession;
   private readonly ChatClientMetadata _metadata;
@@ -50,7 +50,7 @@ public sealed class GoogleGenAIRealtimeSession : IRealtimeSession
   private bool _responseInProgress;
 
   // Track whether audio was sent via SendRealtimeInputAsync to avoid mixing with SendClientContentAsync.
-  // Accessed only from SendClientMessageAsync; callers must serialize sends.
+  // Accessed only from SendAsync; callers must serialize sends.
   private bool _lastInputWasRealtime;
 
   /// <inheritdoc />
@@ -80,7 +80,7 @@ public sealed class GoogleGenAIRealtimeSession : IRealtimeSession
   }
 
   /// <inheritdoc />
-  public async Task SendClientMessageAsync(
+  public async Task SendAsync(
     RealtimeClientMessage message,
     CancellationToken cancellationToken = default)
   {
@@ -99,11 +99,11 @@ public sealed class GoogleGenAIRealtimeSession : IRealtimeSession
           await HandleAudioCommitAsync(cancellationToken).ConfigureAwait(false);
           break;
 
-        case RealtimeClientConversationItemCreateMessage itemCreate:
+        case RealtimeClientCreateConversationItemMessage itemCreate:
           await HandleConversationItemCreateAsync(itemCreate, cancellationToken).ConfigureAwait(false);
           break;
 
-        case RealtimeClientResponseCreateMessage:
+        case RealtimeClientCreateResponseMessage:
           if (!_lastInputWasRealtime)
           {
             await _asyncSession.SendClientContentAsync(
@@ -163,26 +163,6 @@ public sealed class GoogleGenAIRealtimeSession : IRealtimeSession
     if (serviceType.IsInstanceOfType(_asyncSession)) return _asyncSession;
 
     return null;
-  }
-
-  /// <inheritdoc />
-  public void Dispose()
-  {
-    if (Interlocked.Exchange(ref _disposed, 1) != 0) return;
-
-    // Fire-and-forget async disposal on a thread pool thread to avoid
-    // deadlocking when called from a UI thread with a SynchronizationContext.
-    _ = Task.Run(async () =>
-    {
-      try
-      {
-        await _asyncSession.DisposeAsync().ConfigureAwait(false);
-      }
-      catch (Exception ex) when (ex is ObjectDisposedException or WebSocketException)
-      {
-        // Already disposed or disconnected
-      }
-    });
   }
 
   /// <inheritdoc />
@@ -296,7 +276,7 @@ public sealed class GoogleGenAIRealtimeSession : IRealtimeSession
   }
 
   private async Task HandleConversationItemCreateAsync(
-    RealtimeClientConversationItemCreateMessage itemCreate,
+    RealtimeClientCreateConversationItemMessage itemCreate,
     CancellationToken cancellationToken)
   {
     if (itemCreate.Item?.Contents is null or { Count: 0 })
