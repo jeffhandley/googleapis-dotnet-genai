@@ -593,7 +593,7 @@ internal sealed class GoogleGenAIChatClient : IChatClient
       }
       else if (part.ExecutableCode is { Code: not null } executableCode)
       {
-        content = new CodeInterpreterToolCallContent()
+        content = new CodeInterpreterToolCallContent(string.Empty)
         {
           Inputs = new List<AIContent>()
           {
@@ -607,7 +607,7 @@ internal sealed class GoogleGenAIChatClient : IChatClient
       }
       else if (part.CodeExecutionResult is { Output: { } codeOutput } codeExecutionResult)
       {
-        content = new CodeInterpreterToolResultContent()
+        content = new CodeInterpreterToolResultContent(string.Empty)
         {
           Outputs = new List<AIContent>()
            {

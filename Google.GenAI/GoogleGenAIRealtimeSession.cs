@@ -68,18 +68,6 @@ public sealed class GoogleGenAIRealtimeSession : IRealtimeClientSession
   }
 
   /// <inheritdoc />
-  /// <remarks>
-  /// Google's Live API configures the session entirely at connection time via <c>ConnectAsync</c>.
-  /// Mid-session reconfiguration is not supported by the protocol. This method stores the options
-  /// locally for reference but does not apply them to the active session.
-  /// </remarks>
-  public Task UpdateAsync(RealtimeSessionOptions options, CancellationToken cancellationToken = default)
-  {
-    Options = options ?? throw new ArgumentNullException(nameof(options));
-    return Task.CompletedTask;
-  }
-
-  /// <inheritdoc />
   public async Task SendAsync(
     RealtimeClientMessage message,
     CancellationToken cancellationToken = default)
@@ -91,19 +79,23 @@ public sealed class GoogleGenAIRealtimeSession : IRealtimeClientSession
     {
       switch (message)
       {
-        case RealtimeClientInputAudioBufferAppendMessage audioAppend:
+        case InputAudioBufferAppendRealtimeClientMessage audioAppend:
           await HandleAudioAppendAsync(audioAppend, cancellationToken).ConfigureAwait(false);
           break;
 
-        case RealtimeClientInputAudioBufferCommitMessage:
+        case InputAudioBufferCommitRealtimeClientMessage:
           await HandleAudioCommitAsync(cancellationToken).ConfigureAwait(false);
           break;
 
-        case RealtimeClientCreateConversationItemMessage itemCreate:
+        case CreateConversationItemRealtimeClientMessage itemCreate:
           await HandleConversationItemCreateAsync(itemCreate, cancellationToken).ConfigureAwait(false);
           break;
 
-        case RealtimeClientCreateResponseMessage:
+        case SessionUpdateRealtimeClientMessage sessionUpdate:
+          Options = sessionUpdate.Options ?? throw new ArgumentNullException(nameof(sessionUpdate.Options));
+          break;
+
+        case CreateResponseRealtimeClientMessage:
           if (!_lastInputWasRealtime)
           {
             await _asyncSession.SendClientContentAsync(
@@ -175,7 +167,7 @@ public sealed class GoogleGenAIRealtimeSession : IRealtimeClientSession
   #region Send Helpers (MEAI → Google GenAI)
 
   private Task HandleAudioAppendAsync(
-    RealtimeClientInputAudioBufferAppendMessage audioAppend,
+    InputAudioBufferAppendRealtimeClientMessage audioAppend,
     CancellationToken cancellationToken)
   {
     if (audioAppend.Content is null || !audioAppend.Content.HasTopLevelMediaType("audio"))
@@ -276,7 +268,7 @@ public sealed class GoogleGenAIRealtimeSession : IRealtimeClientSession
   }
 
   private async Task HandleConversationItemCreateAsync(
-    RealtimeClientCreateConversationItemMessage itemCreate,
+    CreateConversationItemRealtimeClientMessage itemCreate,
     CancellationToken cancellationToken)
   {
     if (itemCreate.Item?.Contents is null or { Count: 0 })
@@ -413,7 +405,7 @@ public sealed class GoogleGenAIRealtimeSession : IRealtimeClientSession
       if (!_responseInProgress)
       {
         _responseInProgress = true;
-        yield return new RealtimeServerResponseCreatedMessage(RealtimeServerMessageType.ResponseCreated)
+        yield return new ResponseCreatedRealtimeServerMessage(RealtimeServerMessageType.ResponseCreated)
         {
           RawRepresentation = serverMessage,
         };
@@ -426,17 +418,17 @@ public sealed class GoogleGenAIRealtimeSession : IRealtimeClientSession
           new FunctionCallContent(fc.Id ?? string.Empty, fc.Name ?? string.Empty, fc.Args?.ToDictionary(kvp => kvp.Key, kvp => (object?)kvp.Value))
         };
 
-        var item = new RealtimeContentItem(contents, id: fc.Id, role: ChatRole.Assistant);
+        var item = new RealtimeConversationItem(contents, id: fc.Id, role: ChatRole.Assistant);
 
         // Emit ResponseOutputItemAdded (signals start of output item)
-        yield return new RealtimeServerResponseOutputItemMessage(RealtimeServerMessageType.ResponseOutputItemAdded)
+        yield return new ResponseOutputItemRealtimeServerMessage(RealtimeServerMessageType.ResponseOutputItemAdded)
         {
           Item = item,
           RawRepresentation = serverMessage,
         };
 
         // Emit ResponseOutputItemDone (required by FunctionInvokingRealtimeSession middleware)
-        yield return new RealtimeServerResponseOutputItemMessage(RealtimeServerMessageType.ResponseOutputItemDone)
+        yield return new ResponseOutputItemRealtimeServerMessage(RealtimeServerMessageType.ResponseOutputItemDone)
         {
           Item = item,
           RawRepresentation = serverMessage,
@@ -457,7 +449,7 @@ public sealed class GoogleGenAIRealtimeSession : IRealtimeClientSession
     // Usage metadata
     if (serverMessage.UsageMetadata is { } usage)
     {
-      yield return new RealtimeServerResponseCreatedMessage(RealtimeServerMessageType.ResponseDone)
+      yield return new ResponseCreatedRealtimeServerMessage(RealtimeServerMessageType.ResponseDone)
       {
         Usage = new UsageDetails
         {
@@ -472,7 +464,7 @@ public sealed class GoogleGenAIRealtimeSession : IRealtimeClientSession
     // GoAway (server disconnect)
     if (serverMessage.GoAway is not null)
     {
-      yield return new RealtimeServerErrorMessage
+      yield return new ErrorRealtimeServerMessage
       {
         Error = new ErrorContent("Server is disconnecting (GoAway)"),
         RawRepresentation = serverMessage,
@@ -490,7 +482,7 @@ public sealed class GoogleGenAIRealtimeSession : IRealtimeClientSession
       if (!_responseInProgress)
       {
         _responseInProgress = true;
-        yield return new RealtimeServerResponseCreatedMessage(RealtimeServerMessageType.ResponseCreated)
+        yield return new ResponseCreatedRealtimeServerMessage(RealtimeServerMessageType.ResponseCreated)
         {
           RawRepresentation = rawMessage,
         };
@@ -502,7 +494,7 @@ public sealed class GoogleGenAIRealtimeSession : IRealtimeClientSession
         if (part.InlineData is { Data: not null } blob &&
             blob.MimeType?.StartsWith("audio/", StringComparison.OrdinalIgnoreCase) == true)
         {
-          yield return new RealtimeServerOutputTextAudioMessage(RealtimeServerMessageType.OutputAudioDelta)
+          yield return new OutputTextAudioRealtimeServerMessage(RealtimeServerMessageType.OutputAudioDelta)
           {
             Audio = Convert.ToBase64String(blob.Data),
             RawRepresentation = rawMessage,
@@ -512,7 +504,7 @@ public sealed class GoogleGenAIRealtimeSession : IRealtimeClientSession
         // Text response
         if (!string.IsNullOrEmpty(part.Text))
         {
-          yield return new RealtimeServerOutputTextAudioMessage(RealtimeServerMessageType.OutputTextDelta)
+          yield return new OutputTextAudioRealtimeServerMessage(RealtimeServerMessageType.OutputTextDelta)
           {
             Text = part.Text,
             RawRepresentation = rawMessage,
@@ -524,7 +516,7 @@ public sealed class GoogleGenAIRealtimeSession : IRealtimeClientSession
     // Input transcription
     if (serverContent.InputTranscription is { Text: not null } inputTranscription)
     {
-      yield return new RealtimeServerInputAudioTranscriptionMessage(RealtimeServerMessageType.InputAudioTranscriptionCompleted)
+      yield return new InputAudioTranscriptionRealtimeServerMessage(RealtimeServerMessageType.InputAudioTranscriptionCompleted)
       {
         Transcription = inputTranscription.Text,
         RawRepresentation = rawMessage,
@@ -534,7 +526,7 @@ public sealed class GoogleGenAIRealtimeSession : IRealtimeClientSession
     // Output transcription
     if (serverContent.OutputTranscription is { Text: not null } outputTranscription)
     {
-      yield return new RealtimeServerOutputTextAudioMessage(RealtimeServerMessageType.OutputAudioTranscriptionDelta)
+      yield return new OutputTextAudioRealtimeServerMessage(RealtimeServerMessageType.OutputAudioTranscriptionDelta)
       {
         Text = outputTranscription.Text,
         RawRepresentation = rawMessage,
@@ -545,7 +537,7 @@ public sealed class GoogleGenAIRealtimeSession : IRealtimeClientSession
     if (serverContent.TurnComplete == true || serverContent.GenerationComplete == true)
     {
       _responseInProgress = false;
-      yield return new RealtimeServerResponseCreatedMessage(RealtimeServerMessageType.ResponseDone)
+      yield return new ResponseCreatedRealtimeServerMessage(RealtimeServerMessageType.ResponseDone)
       {
         RawRepresentation = rawMessage,
       };
